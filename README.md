@@ -1,136 +1,192 @@
 # Azure-VM-Public-IP-Upgrade-Basic-SKU-to-Standard-SKU
-## Project Overview
-As part of Microsoft's deprecation of **Basic SKU Public IP Addresses**, this project documents the process of upgrading over 300+ Azure Virtual Machines from **Basic** to **Standard SKU** Public IPs. The project includes both **manual** and **automated** methods to perform the upgrade securely and with minimal service interruption.
+
+## 📘 Project Overview
+
+As part of Microsoft's deprecation of **Basic SKU Public IP Addresses**, this project documents the process of upgrading over **300+ Azure Virtual Machines** from **Basic** to **Standard SKU** Public IPs.
+
+The repository includes:
+- A **manual step-by-step guide**.
+- A **PowerShell automation script** for large-scale upgrades.
+- Direct references to **Microsoft advisories** and product documentation.
 
 > ⏰ **Deadline:** Basic SKU Public IPs will be retired on **30 September 2025**  
-> 📧 Notification Reference: Azure Advisory — Tracking ID `6TH2-BV8`
+> 📧 **Notification Reference:** Azure Advisory — Tracking ID `6TH2-BV8`
+
+---
 
 ## 📢 Microsoft Advisory Summary
 
-- **Basic SKU Public IPs** will no longer be supported after **30 Sept 2025**
-- Creation of new Basic SKUs was disabled as of **31 March 2025**
-- **Standard SKU** provides improved:
-  - Integration with Azure Firewall, Load Balancer, NAT Gateway
-  - Security defaults (closed to inbound by default)
-  - Zonal and zone-redundant availability
+- **Basic SKU Public IPs** will no longer be supported after **30 September 2025**.
+- **Creation of new Basic SKUs** has been disabled since **31 March 2025**.
+- Upgrade to **Standard SKU** for:
+  - Integration with Azure Firewall, Standard Load Balancer, and NAT Gateway.
+  - **Secure-by-default**: Inbound access is blocked unless explicitly allowed.
+  - **Zonal** and **Zone-redundant** configuration support.
 
 🔗 [Microsoft Documentation – Public IP SKU](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses#sku)
 
 ---
-## Solutions
 
-Manual Upgrade Process
+## ✅ Solutions
 
-The manual process involves:
+### 🧭 Manual Upgrade Process
 
-Checking IP assignment type (static/dynamic)
+> A brief service interruption may occur during this process.
 
-Shutting down the VM (if applicable)
+#### **Step 1: Validate IP Assignment**
+- Go to: `Public IP Resource > Configuration`
+- Confirm whether the IP is `Static` or `Dynamic`.
 
-Dissociating the public IP (if needed)
+#### **Step 2: Graceful Shutdown**
+- Shut down the VM from the **guest OS**.
+- **Do not deallocate**, unless you have capacity reservations.
 
-Changing dynamic IPs to static
+#### **Step 3: Dissociate Public IP (if needed)**
+- Navigate to: `VM > Networking > Network Interface > IP Configuration`
+- Open `ipconfig1` or the relevant interface.
+- Uncheck **Associate public IP**, then **Save**.
 
-Performing the SKU upgrade
+#### **Step 4: Convert Dynamic IP to Static**
+- Go to: `Public IP Resource > Configuration`
+- Change **IP Assignment** to `Static`.
 
-Reassociating the IP (if previously dissociated)
+#### **Step 5: Upgrade SKU**
+- From the **Overview tab** of the Public IP, click:
+  > “Upgrade to Standard SKU – Microsoft recommends Standard SKU for production workloads”
+- Confirm the upgrade (Note: This is irreversible).
+- Verify the **SKU** now reads `Standard`.
 
-Powering the VM back on
+#### **Step 6: Reassociate the Public IP**
+- Return to: `VM > Networking > Network Interface > IP Configuration`
+- Re-associate the updated **Standard Public IP**.
 
-🧭 Manual Upgrade Process
-Step 1: Validate IP Assignment
-Navigate to Public IP Resource > Configuration
+#### **Step 7: Power On and Validate**
+- Start the VM.
+- Test and validate network connectivity.
 
-Check if the IP is Static or Dynamic
+---
 
-Step 2: Graceful Shutdown
-Shutdown VM from OS, avoid full deallocation
+### ⚙️ Automated Upgrade via PowerShell
 
-Step 3: Dissociate Public IP
-Go to VM > Networking > NIC > IP Configuration
+A PowerShell script (`Start-VMPublicIPUpgrade.ps1`) automates the upgrade process across multiple VMs efficiently.
 
-Click the IP interface (e.g., ipconfig1)
+#### 🛠 Key Features
+- Automatically detects if a VM’s IP is already **Standard SKU**.
+- Supports **Static** and **Dynamic** IPs.
+- Generates a **CSV log** for tracking upgrades.
+- Includes `-WhatIf` support for **dry runs**.
 
-Uncheck "Associate public IP" and Save
+#### 📋 Prerequisites
+- Azure PowerShell Module installed
+- PowerShell 5.1 or later
+- Sufficient RBAC permissions (Contributor or higher)
 
-Step 4: Set IP to Static (if Dynamic)
-In Public IP Resource > Configuration, change IP Assignment to Static
+#### 🚀 Usage Examples
 
-Step 5: Upgrade SKU
-Navigate to the Public IP
-
-Click banner “Upgrade to Standard SKU”
-
-Confirm upgrade (no rollback option)
-
-Verify SKU in Overview tab as Standard
-
-Step 6: Reassociate Public IP
-Go back to VM > NIC > IP Configuration
-
-Re-associate the upgraded Standard Public IP
-
-Step 7: Power On and Test
-Start the VM and confirm connectivity
-
-Automated Upgrade Solution
-The PowerShell script Start-VMPublicIPUpgrade.ps1 automates the upgrade process with these features:
-
-Checks current SKU status (skips if already Standard)
-
-Handles both static and dynamic IP addresses
-
-Creates recovery logs for tracking
-
-Supports WhatIf mode for dry runs
-
-Getting Started
-Prerequisites
-Azure PowerShell module
-
-Appropriate Azure RBAC permissions
-
-PowerShell 5.1 or later
-
-Usage
-powershell
-# Single VM upgrade (dry run)
+```powershell
+# Dry run for a single VM
 Start-VMPublicIPUpgrade -VMName 'vmname' -ResourceGroupName 'rgname' -WhatIf
 
 # Actual upgrade
 Start-VMPublicIPUpgrade -VMName 'vmname' -ResourceGroupName 'rgname'
 
-# Bulk upgrade (pass array of VM names)
+# Bulk upgrade for multiple VMs
 $vmList = @('vm1','vm2','vm3')
 $vmList | ForEach-Object {
     Start-VMPublicIPUpgrade -VMName $_ -ResourceGroupName 'rgname'
 }
-Important Notes 🔐 Notes on Security and Availability
-Service Impact: The upgrade process may cause brief network interruptions
-
-Irreversible Action: Once upgraded to Standard SKU, you cannot revert to Basic SKU
-
-Testing: Always test in non-production environments first
-
-Backup: Ensure you have proper backups before making changes
-
-Downtime: Minor disruption may occur during disassociation/reassociation.
-
-No Downgrade: Once upgraded to Standard SKU, the Public IP cannot be downgraded.
-
-Capacity Planning: Avoid deallocation unless capacity is guaranteed.
-
-Automation Fallback: Script safely skips already-upgraded SKUs.
+```
 
 
+## 🧾 Sample Output Logs
 
-References
-🔗 [Microsoft Documentation – Public IP SKU](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses#sku)
-🔗 [Upgrade public IP addresses attached to VM from Basic to Standard](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-upgrade-vm?tabs=azure-cli)
-🔗 [AzureVMPublicIPUpgrade 1.0.2]([https](https://www.powershellgallery.com/packages/AzureVMPublicIPUpgrade/1.0.2))
-🔗 [AzureVMPublicIPUpgrade.psm1]([https](https://www.powershellgallery.com/packages/AzureVMPublicIPUpgrade/1.0.2/Content/AzureVMPublicIPUpgrade.psm1))
-🔗 [Service Health](https://portal.azure.com/#view/Microsoft_Azure_Health/AzureHealthBrowseBlade/~/serviceIssues)
-🔗 [Service Health Advisories ]([https://portal.azure.com/#view/Microsoft_Azure_Health/AzureHealthBrowseBlade/~/serviceIssues](https://portal.azure.com/#view/Microsoft_Azure_Health/AzureHealthBrowseBlade/~/otherAnnouncements))
-🔗 [Microsoft Advisory Notice](https://app.azure.com/h/6TH2-BV8/a96207)
-🔗 [Services Retirement Workbook](https://portal.azure.com/#view/AppInsightsExtension/UsageNotebookBlade/ComponentId/Azure%20Advisor/ConfigurationId/community-Workbooks%2FAzure%20Advisor%2FAzureServiceRetirement/Type/workbook/WorkbookTemplateName/Service%20Retirement%20(Preview))
+Below are sample logs generated by the automated PowerShell script used to upgrade Azure VM Public IPs from **Basic** to **Standard SKU**.
 
+---
+
+### ✅ Sample Output — VM Already on Standard SKU (Skipped)
+
+```powershell
+PS C:\Users\usman.devops> Start-VMPublicIPUpgrade -VMName 'inventory-app-01' -ResourceGroupName 'rg-inv-east' -WhatIf
+[2025-07-17T08:12:00+05][INFO] ####### Starting VM Public IP Upgrade process... #######
+[2025-07-17T08:12:00+05][INFO] Subscription: 2fd8a7e9-93c5-4e7e-bd91-2a129d1f0ac2
+[2025-07-17T08:12:01+05][INFO] Creating recovery log file at 'PublicIPUpgrade_Recovery_2025-07-17-08-12.csv'
+[2025-07-17T08:12:01+05][INFO] Getting VM 'inventory-app-01' in resource group 'rg-inv-east'...
+[2025-07-17T08:12:04+05][INFO] Processing VM 'inventory-app-01'...
+[2025-07-17T08:12:09+05][INFO] VM 'inventory-app-01' has 1 public IP address attached.
+[2025-07-17T08:12:13+05][WARNING] Public IP address SKU is already 'Standard'. Skipping upgrade.
+[2025-07-17T08:12:14+05][INFO] ####### Upgrade process complete. #######
+
+[2025-07-17T12:20:47+05][INFO] ####### Upgrade process complete.
+```
+### ✅ Sample Output — VM Successfully Upgraded
+
+```powershell
+PS C:\Users\hira.cloudadmin> Start-VMPublicIPUpgrade -VMName 'crm-core-02' -ResourceGroupName 'rg-crm-core'
+[2025-07-22T14:39:00+05][INFO] ####### Starting VM Public IP Upgrade process... #######
+[2025-07-22T14:39:00+05][INFO] Subscription: d1c1e57b-b9de-4ad6-8e45-b0f2fc291201
+[2025-07-22T14:39:01+05][INFO] Creating recovery log file at 'PublicIPUpgrade_Recovery_2025-07-22-14-39.csv'
+[2025-07-22T14:39:01+05][INFO] Getting VM 'crm-core-02' in resource group 'rg-crm-core'...
+[2025-07-22T14:39:06+05][INFO] Processing VM 'crm-core-02'...
+[2025-07-22T14:39:12+05][INFO] VM 'crm-core-02' has 1 public IP address attached.
+[2025-07-22T14:39:15+05][INFO] Public IP address SKU is 'Basic'. Upgrade required.
+
+[2025-07-22T14:39:19+05][INFO] Setting public IP assignment to 'Static'...
+[2025-07-22T14:39:28+05][INFO] Successfully changed to static.
+
+[2025-07-22T14:39:34+05][INFO] Disassociating public IP from NIC 'nic-crm-02'...
+[2025-07-22T14:39:52+05][INFO] Disassociation successful.
+
+[2025-07-22T14:39:56+05][INFO] Initiating SKU upgrade for Public IP 'pip-crm-02'...
+[2025-07-22T14:40:08+05][INFO] SKU upgraded to 'Standard'.
+
+[2025-07-22T14:40:13+05][INFO] Reassociating public IP to NIC 'nic-crm-02'...
+[2025-07-22T14:40:27+05][INFO] Reassociation completed.
+
+[2025-07-22T14:40:32+05][INFO] Upgrade of VM 'crm-core-02' complete.
+[2025-07-22T14:40:32+05][INFO] ####### Upgrade process complete. #######
+```
+---
+
+## 🔐 Security & Availability Notes
+
+- **Service Impact**: Temporary disconnection may occur during IP reassignment.
+    
+- **No Downgrade**: The upgrade from Basic to Standard is **irreversible**.
+    
+- **Always test** in a staging or non-production environment.
+    
+- **Backups recommended** before performing manual or scripted changes.
+    
+- **Avoid full deallocation** to prevent potential capacity allocation issues.
+    
+- Script is **idempotent** – skips already upgraded resources.
+    
+
+---
+
+## 📚 References
+
+- 🔗 [Microsoft – Public IP SKU Overview](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses#sku)
+    
+- 🔗 [Microsoft – Upgrade Public IPs on VMs](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-upgrade-vm?tabs=azure-cli)
+    
+- 🔗 [AzureVMPublicIPUpgrade Module – PowerShell Gallery](https://www.powershellgallery.com/packages/AzureVMPublicIPUpgrade/1.0.2)
+    
+- 🔗 [AzureVMPublicIPUpgrade.psm1 Source](https://www.powershellgallery.com/packages/AzureVMPublicIPUpgrade/1.0.2/Content/AzureVMPublicIPUpgrade.psm1)
+    
+- 🔗 [Azure Service Health Portal](https://portal.azure.com/#view/Microsoft_Azure_Health/AzureHealthBrowseBlade/~/serviceIssues)
+    
+- 🔗 [Azure Advisory Notification – Tracking ID: 6TH2-BV8](https://app.azure.com/h/6TH2-BV8/a96207)
+    
+- 🔗 [Azure Services Retirement Workbook](https://portal.azure.com/#view/AppInsightsExtension/UsageNotebookBlade/ComponentId/Azure%20Advisor/ConfigurationId/community-Workbooks%2FAzure%20Advisor%2FAzureServiceRetirement/Type/workbook/WorkbookTemplateName/Service%20Retirement%20\(Preview\))
+    
+
+---
+
+## 🧑‍💼 Author
+
+**Hamza** – Azure Cloud Specialist  
+📁 This project is part of my professional GitHub portfolio showcasing automation and cloud infrastructure modernization.
+
+For inquiries or collaboration, please reach out via [LinkedIn](https://www.linkedin.com/in/hamza-ramzan/) or email.
